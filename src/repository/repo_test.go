@@ -18,12 +18,27 @@ func Test_Repo(t *testing.T) {
 		fmt.Printf("%v %v %v\n", v.Name, v.State, v.CreateTime)
 	}
 
-	/*
-		err = RM.DeleteRepo("test")
-		if err != nil {
-			t.Error("删除仓库失败:", err)
-			t.Fail()
-		}
-	*/
+	err = RM.DeleteRepo("test")
+	if err != nil {
+		t.Error("删除仓库失败:", err)
+		t.Fail()
+	}
+}
+
+func Test_AddRemote(t *testing.T) {
+	opt := CreateOption{
+		URL: "http://127.0.0.1:8879",
+	}
+
+	err := RM.AddRemoteRepo("localdddd", opt)
+	if err != nil {
+		t.Error("添加远程仓库失败:", err)
+		t.Fail()
+	}
+
+	repos := RM.ListRepos()
+	for _, v := range repos {
+		fmt.Printf("%v %v %v\n", v.Name, v.State, v.CreateTime)
+	}
 
 }
