@@ -1,15 +1,12 @@
 package charts
 
 import (
-	"xhelm/repository"
+	helmrepo "k8s.io/helm/pkg/repo"
 )
 
-const (
-	localChartRelativePath = "charts"
-	localCacheRelativePath = "cache"
-)
-
-func LocalChartPath(repo, chart string) string {
-	return repository.LocalRepoPath(repo) + "/" + chart
-
+type Index struct {
+}
+type Chart struct {
+	Name     string `json:"name"`
+	Versions helmrepo.ChartVersions
 }

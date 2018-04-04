@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"charts"
 	"db"
 	"fmt"
 	"os"
@@ -291,6 +292,34 @@ func (rm *RepositoryManager) ListRepos() []Repository {
 	}
 
 	return repos
+}
+
+func (rm *RepositoryManager) ListCharts(repoName string) ([]charts.Chart, error) {
+	rm.Locker.Lock()
+
+	_, err := rm.getRepo(repoName)
+	if err != nil {
+		rm.Locker.Unlock()
+		return nil, fmt.Errorf("repo not found")
+	}
+
+	rm.Locker.Unlock()
+
+	indexFile := setting.LocalRepoIndexFile(repoName)
+	indf, err := helmrepo.LoadIndexFile(indexFile)
+	if err != nil {
+		return nil, err
+	}
+	cs := make([]charts.Chart, 0)
+	for k, v := range indf.Entries {
+		var c charts.Chart
+		c.Name = k
+		c.Versions = append(c.Versions, v...)
+
+		cs = append(cs, c)
+	}
+
+	return cs, nil
 }
 
 /*

@@ -1,8 +1,6 @@
 package main
 
-import (
-	"xlog"
-)
+import "xlog"
 
 func main() {
 	err := xlog.Init()

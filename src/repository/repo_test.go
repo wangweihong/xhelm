@@ -36,9 +36,16 @@ func Test_AddRemote(t *testing.T) {
 		t.Fail()
 	}
 
-	repos := RM.ListRepos()
-	for _, v := range repos {
-		fmt.Printf("%v %v %v\n", v.Name, v.State, v.CreateTime)
+	cs, err := RM.ListCharts("localdddd")
+	if err != nil {
+		t.Error("查看chart失败")
+		t.Fail()
 	}
 
+	for _, v := range cs {
+		fmt.Println(v.Name)
+		for _, j := range v.Versions {
+			fmt.Println(j.Version)
+		}
+	}
 }
