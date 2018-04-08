@@ -3,6 +3,7 @@ package repository
 import (
 	"charts"
 	"db"
+	"encoding/json"
 	"fmt"
 	"os"
 	"setting"
@@ -10,29 +11,27 @@ import (
 	"time"
 	"xlog"
 
+	goflock "github.com/theckman/go-flock"
 	helmgetter "k8s.io/helm/pkg/getter"
 	helmrepo "k8s.io/helm/pkg/repo"
 )
 
 const (
-	//localRepoRootPath = "/var/local/xhelm"
-
-	etcdRepoRootPath = "/xhelm/repo"
-
 	StateInitilizing  = "initializing"  //用于表明repo仍然在创建过程中,不接受chart创建
 	StateInitComplete = "initcompleted" //repo完成创建过程,接收正常操作
 )
 
 var (
-	RM = &RepositoryManager{Repos: make(map[string]Repository)}
+	RM          = &RepositoryManager{}
+	repoflocker = goflock.NewFlock(setting.LocalRepoRootPath() + "/" + "repo.lock")
 )
 
+//TODO: 不需要在内存中维护缓存, 这个访问量实在太少
 type RepositoryManager struct {
-	Locker sync.RWMutex
-	Repos  map[string]Repository
 }
 
 type Repository struct {
+	locker sync.RWMutex
 	helmrepo.Entry
 
 	Remote     bool
@@ -48,16 +47,26 @@ type CreateOption struct {
 	KeyFile  string `json:"keyFile"`
 }
 
-func (rm *RepositoryManager) getRepo(Name string) (*Repository, error) {
-	repo, ok := rm.Repos[Name]
-	if !ok {
-		return nil, fmt.Errorf("repo not found")
+func (rm *RepositoryManager) getRepo(name string) (*Repository, error) {
+	data, err := db.RDB.GetRepo(name)
+	if err != nil {
+		return nil, err
 	}
-	return &repo, nil
+
+	var r Repository
+	err = json.Unmarshal(data, &r)
+	if err != nil {
+		return nil, err
+	}
+
+	return &r, nil
 }
 
 //TODO: file lock
 func cleanRepoLocalDir(repo string) error {
+	repoflocker.Lock()
+	defer repoflocker.Unlock()
+
 	rp := setting.LocalRepoPath(repo)
 	err := os.RemoveAll(rp)
 	if !os.IsNotExist(err) {
@@ -67,6 +76,8 @@ func cleanRepoLocalDir(repo string) error {
 }
 
 func createRepoLocalDir(repo string) error {
+	repoflocker.Lock()
+	defer repoflocker.Unlock()
 	//
 	//强制删除以前可能残留的目录架构
 	err := cleanRepoLocalDir(repo)
@@ -128,122 +139,63 @@ func downloadRemoteRepoIndex(repo *Repository) error {
 	return nil
 }
 
-func (rm *RepositoryManager) AddRemoteRepo(name string, opt CreateOption) error {
+func (rm *RepositoryManager) AddRepo(name string, opt *CreateOption) error {
 	if err := isNameValid(name); err != nil {
 		return err
-	}
-
-	rm.Locker.Lock()
-
-	if _, err := rm.getRepo(name); err == nil {
-		rm.Locker.Unlock()
-		return fmt.Errorf("repo has exist")
 	}
 
 	var repo Repository
 	repo.CreateTime = time.Now().Unix()
 	repo.Name = name
-	repo.Remote = true
-	repo.CAFile = opt.CertFile
-	repo.KeyFile = opt.KeyFile
-	repo.URL = opt.URL
-	repo.Username = opt.Username
-	repo.Password = opt.Password
+	if opt != nil {
+		repo.Remote = true
+		repo.CAFile = opt.CertFile
+		repo.KeyFile = opt.KeyFile
+		repo.URL = opt.URL
+		repo.Username = opt.Username
+		repo.Password = opt.Password
+	}
 
-	repo.State = StateInitilizing
-	rm.Repos[name] = repo
+	//如果因为已存在, 则直接创建失败
+	if err := db.RDB.CreateRepo(name, repo); err == nil {
+		return fmt.Errorf("create to create repo in db failed: %v", err)
+	}
 
-	rm.Locker.Unlock()
+	var e error
+	var err2 error
 
 	//创建本地目录
 	//TODO: 处理可能会残留的旧的repo的目录
 	err := createRepoLocalDir(name)
 	if err != nil {
-		rm.Locker.Lock()
-		defer rm.Locker.Unlock()
-		delete(rm.Repos, name)
-		return err
+		e = err
+		goto clean_etcd
 	}
 
-	err = downloadRemoteRepoIndex(&repo)
-	if err != nil {
-		rm.Locker.Lock()
-		defer rm.Locker.Unlock()
-		delete(rm.Repos, name)
-		return err
-	}
-
-	//避免创建文件阻塞, etcd网络阻塞, 导致锁长期被占用
-	err = db.RDB.CreateRepo(name, repo)
-	if err != nil {
-		err2 := cleanRepoLocalDir(name)
-		if err2 != nil {
-			xlog.Logger.Errorf("clean repo local '%v' dir fail while creating: %v", setting.LocalRepoPath(name), err2)
+	//TODO:清理
+	if repo.Remote {
+		err = downloadRemoteRepoIndex(&repo)
+		if err != nil {
+			e = err
+			goto clean_local
 		}
-		rm.Locker.Lock()
-		defer rm.Locker.Unlock()
-		delete(rm.Repos, name)
-		return err
 	}
 
-	rm.Locker.Lock()
-	defer rm.Locker.Unlock()
-
-	repo.State = StateInitComplete
-	rm.Repos[name] = repo
 	return nil
 
-}
-
-func (rm *RepositoryManager) CreateRepo(name string) error {
-	if err := isNameValid(name); err != nil {
-		return err
+clean_local:
+	err2 = cleanRepoLocalDir(name)
+	if err2 != nil {
+		xlog.Logger.Errorf("clean repo local '%v' dir fail while creating: %v", setting.LocalRepoPath(name), err2)
 	}
 
-	rm.Locker.Lock()
-
-	if _, err := rm.getRepo(name); err == nil {
-		rm.Locker.Unlock()
-		return fmt.Errorf("repo has exist")
+clean_etcd:
+	err2 = db.RDB.DeleteRepo(name)
+	if err2 != nil {
+		xlog.Logger.Error(err2)
 	}
 
-	var repo Repository
-	repo.CreateTime = time.Now().Unix()
-	repo.Name = name
-	repo.State = StateInitilizing
-	rm.Repos[name] = repo
-
-	rm.Locker.Unlock()
-
-	//创建本地目录
-	//TODO: 处理可能会残留的旧的repo的目录
-	err := createRepoLocalDir(name)
-	if err != nil {
-		rm.Locker.Lock()
-		defer rm.Locker.Unlock()
-		delete(rm.Repos, name)
-		return err
-	}
-
-	//避免创建文件阻塞, etcd网络阻塞, 导致锁长期被占用
-	err = db.RDB.CreateRepo(name, repo)
-	if err != nil {
-		err2 := cleanRepoLocalDir(name)
-		if err2 != nil {
-			xlog.Logger.Errorf("clean repo local '%v' dir fail while creating: %v", setting.LocalRepoPath(name), err2)
-		}
-		rm.Locker.Lock()
-		defer rm.Locker.Unlock()
-		delete(rm.Repos, name)
-		return err
-	}
-
-	rm.Locker.Lock()
-	defer rm.Locker.Unlock()
-
-	repo.State = StateInitComplete
-	rm.Repos[name] = repo
-	return nil
+	return e
 }
 
 func isRepoLocal(repo *Repository) bool {
@@ -256,24 +208,12 @@ func isRepoLocal(repo *Repository) bool {
 
 //TODO:通知chart进行清理
 func (rm *RepositoryManager) DeleteRepo(name string) error {
-	rm.Locker.Lock()
-
-	_, err := rm.getRepo(name)
-	if err != nil {
-		rm.Locker.Unlock()
-		return fmt.Errorf("repo not found")
-	}
-	rm.Locker.Unlock()
-
 	//优先删除etcd
-	err = db.RDB.DeleteRepo(name)
+	err := db.RDB.DeleteRepo(name)
 	if err != nil {
+		//TODO: 检测etcd不存在的报错
 		return err
 	}
-
-	rm.Locker.Lock()
-	delete(rm.Repos, name)
-	rm.Locker.Unlock()
 
 	err2 := cleanRepoLocalDir(name)
 	if err2 != nil {
@@ -282,44 +222,107 @@ func (rm *RepositoryManager) DeleteRepo(name string) error {
 	return nil
 }
 
-func (rm *RepositoryManager) ListRepos() []Repository {
-	rm.Locker.RLock()
-	defer rm.Locker.RUnlock()
-
-	repos := make([]Repository, 0)
-	for _, v := range rm.Repos {
-		repos = append(repos, v)
-	}
-
-	return repos
-}
-
-func (rm *RepositoryManager) ListCharts(repoName string) ([]charts.Chart, error) {
-	rm.Locker.Lock()
-
-	_, err := rm.getRepo(repoName)
-	if err != nil {
-		rm.Locker.Unlock()
-		return nil, fmt.Errorf("repo not found")
-	}
-
-	rm.Locker.Unlock()
-
-	indexFile := setting.LocalRepoIndexFile(repoName)
-	indf, err := helmrepo.LoadIndexFile(indexFile)
+func (rm *RepositoryManager) ListRepos() ([]Repository, error) {
+	rsData, err := db.RDB.ListRepos()
 	if err != nil {
 		return nil, err
 	}
-	cs := make([]charts.Chart, 0)
-	for k, v := range indf.Entries {
-		var c charts.Chart
-		c.Name = k
-		c.Versions = append(c.Versions, v...)
 
-		cs = append(cs, c)
+	repos := make([]Repository, 0)
+	for _, v := range rsData {
+		var repo Repository
+		err := json.Unmarshal(v, &repo)
+		if err != nil {
+			return nil, fmt.Errorf("unmarshal data fail when list repos : %v", err)
+		}
+
+		repos = append(repos, repo)
 	}
 
+	return repos, nil
+}
+
+//TODO: file lock
+func (rm *RepositoryManager) ListCharts(repoName string) ([]charts.Chart, error) {
+
+	repo, err := rm.getRepo(repoName)
+	if err != nil {
+		return nil, fmt.Errorf("repo not found")
+	}
+
+	cs := make([]charts.Chart, 0)
+	if repo.Remote {
+		indexFile := setting.LocalRepoIndexFile(repoName)
+		indf, err := helmrepo.LoadIndexFile(indexFile)
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range indf.Entries {
+			var c charts.Chart
+			c.Name = k
+			c.Versions = append(c.Versions, v...)
+
+			cs = append(cs, c)
+		}
+	} else {
+		chartsData, err := db.CDB.ListCharts(repoName)
+		if err != nil {
+			return nil, err
+		}
+		for _, v := range chartsData {
+			var c charts.Chart
+			err := json.Unmarshal(v, &c)
+			if err != nil {
+				return nil, fmt.Errorf("unmarshal data fail when list repo '%v' charts : %v", repoName, err)
+			}
+			cs = append(cs, c)
+		}
+	}
 	return cs, nil
+}
+
+func (rm *RepositoryManager) RemoveCharts(repoName string, chart string) error {
+	repo, err := rm.getRepo(repoName)
+	if err != nil {
+		return fmt.Errorf("repo not found")
+	}
+
+	if repo.Remote {
+		return fmt.Errorf("remote repository doesn't support chart remove")
+	}
+
+	err = db.CDB.RemoveChart(repoName, chart)
+	return err
+}
+
+func (rm *RepositoryManager) GetChart(repoName string, chart string) (*charts.Chart, error) {
+	repo, err := rm.getRepo(repoName)
+	if err != nil {
+		return nil, fmt.Errorf("repo not found")
+	}
+
+	if repo.Remote {
+		//
+
+	} else {
+
+	}
+	return nil, err
+
+}
+
+//TODO:
+//1. 在切换节点时, 从数据库中获取所有local repo charts的信息,
+//2. 这些信息组成构建index.yaml文件.
+//3. 在添加/删除chart,以及chart版本时, 对数据库中的文件进行清理,以及更新index.yaml文件
+//4. 不要长期缓存index.yaml文件到内存中, 太占内存, 用完立即释放
+func LoadLocalRepo() error {
+	//添加生成本地的目录
+	//加载所有repo信息
+	db.RDB.ListRepos()
+	//
+
+	return nil
 }
 
 /*

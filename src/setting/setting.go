@@ -9,6 +9,10 @@ const (
 )
 
 //获取repo本地路径
+func LocalRepoRootPath() string {
+	return localRepoRootPath
+}
+
 func LocalRepoPath(repo string) string {
 	return localRepoRootPath + "/" + repo
 }

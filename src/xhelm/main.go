@@ -1,6 +1,10 @@
 package main
 
-import "xlog"
+import (
+	_ "charts"
+	_ "repository"
+	"xlog"
+)
 
 func main() {
 	err := xlog.Init()
