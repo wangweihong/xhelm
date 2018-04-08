@@ -12,6 +12,7 @@ import (
 	"xlog"
 
 	goflock "github.com/theckman/go-flock"
+	helmdowloader "k8s.io/helm/pkg/downloader"
 	helmgetter "k8s.io/helm/pkg/getter"
 	helmrepo "k8s.io/helm/pkg/repo"
 )
@@ -22,8 +23,9 @@ const (
 )
 
 var (
-	RM          = &RepositoryManager{}
-	repoflocker = goflock.NewFlock(setting.LocalRepoRootPath() + "/" + "repo.lock")
+	RM                      = &RepositoryManager{}
+	repoflocker             = goflock.NewFlock(setting.LocalRepoRootPath() + "/" + "repo.lock")
+	errRemoteRepoNotSupport = fmt.Errorf("remote repo don't support this action")
 )
 
 //TODO: 不需要在内存中维护缓存, 这个访问量实在太少
@@ -116,6 +118,36 @@ func isNameValid(name string) error {
 // newHTTPGetter constructs a valid http/https client as Getter
 func newHTTPGetter(URL, CertFile, KeyFile, CAFile string) (helmgetter.Getter, error) {
 	return helmgetter.NewHTTPGetter(URL, CertFile, KeyFile, CAFile)
+}
+
+func downloadRemoteChart(repo *Repository, chartName string, version *string) error {
+	var dest string
+	getters := helmgetter.Providers{
+		{
+			Schemes: []string{"http", "https"},
+			New:     newHTTPGetter,
+		},
+	}
+
+	c := helmdowloader.ChartDownloader{
+		Getters:  getters,
+		Username: repo.Username,
+		Password: repo.Password,
+	}
+
+	chartURL, err := helmrepo.FindChartInAuthRepoURL(repo.URL, repo.Username, repo.Password, chartName, *version, repo.CertFile, repo.KeyFile, repo.CAFile, getters)
+	if err != nil {
+		return nil
+	}
+	saved, v, err := c.DownloadTo(chartURL, *version, dest)
+	if err != nil {
+		return err
+	}
+
+	xlog.Logger.Info("Verification: %v\n", v)
+	xlog.Logger.Info("Chart Download to :%v", saved)
+
+	return nil
 }
 
 func downloadRemoteRepoIndex(repo *Repository) error {
@@ -281,31 +313,54 @@ func (rm *RepositoryManager) ListCharts(repoName string) ([]charts.Chart, error)
 	return cs, nil
 }
 
-func (rm *RepositoryManager) RemoveCharts(repoName string, chart string) error {
+func (rm *RepositoryManager) RemoveCharts(repoName string, chart string, version *string) error {
 	repo, err := rm.getRepo(repoName)
 	if err != nil {
 		return fmt.Errorf("repo not found")
 	}
 
 	if repo.Remote {
-		return fmt.Errorf("remote repository doesn't support chart remove")
+		return errRemoteRepoNotSupport
 	}
 
-	err = db.CDB.RemoveChart(repoName, chart)
+	err = db.CDB.RemoveChart(repoName, chart, version)
 	return err
 }
 
-func (rm *RepositoryManager) GetChart(repoName string, chart string) (*charts.Chart, error) {
+func (rm *RepositoryManager) GetChart(repoName string, chartName string, version *string) (*charts.Chart, error) {
 	repo, err := rm.getRepo(repoName)
 	if err != nil {
 		return nil, fmt.Errorf("repo not found")
 	}
 
 	if repo.Remote {
-		//
+		//指定文件
+		/*
+			var out io.Writer
+
+			c := helmdl.ChartDownloader{
+				Username: repo.Username,
+				Password: repo.Password,
+				Getters:=
+
+			}
+		*/
 
 	} else {
+		/*
+			chartData, err := db.CDB.GetChart(repoName, chartName, version)
+			if err != nil {
+				return nil, err
+			}
 
+
+			var chart charts.Chart
+			err = json.Unmarshal(chartData, &chart)
+			if err != nil {
+				return nil, err
+			}
+			return &chart, nil
+		*/
 	}
 	return nil, err
 
