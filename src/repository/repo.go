@@ -17,11 +17,6 @@ import (
 	helmrepo "k8s.io/helm/pkg/repo"
 )
 
-const (
-	StateInitilizing  = "initializing"  //用于表明repo仍然在创建过程中,不接受chart创建
-	StateInitComplete = "initcompleted" //repo完成创建过程,接收正常操作
-)
-
 var (
 	RM                      = &RepositoryManager{}
 	repoflocker             = goflock.NewFlock(setting.LocalRepoRootPath() + "/" + "repo.lock")
@@ -37,7 +32,6 @@ type Repository struct {
 	helmrepo.Entry
 
 	Remote     bool
-	State      string //不保留到etcd中,每次master节点更改,都需要重新初始化
 	CreateTime int64
 }
 
@@ -335,16 +329,7 @@ func (rm *RepositoryManager) GetChart(repoName string, chartName string, version
 
 	if repo.Remote {
 		//指定文件
-		/*
-			var out io.Writer
-
-			c := helmdl.ChartDownloader{
-				Username: repo.Username,
-				Password: repo.Password,
-				Getters:=
-
-			}
-		*/
+		downloadRemoteChart(&repo, chartName, version)
 
 	} else {
 		/*
