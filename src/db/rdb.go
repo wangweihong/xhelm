@@ -2,6 +2,7 @@ package db
 
 import (
 	"db/etcd"
+	"fmt"
 )
 
 var (
@@ -15,8 +16,8 @@ const (
 type RepoDb interface {
 	CreateRepo(repo string, data interface{}) error
 	DeleteRepo(repo string) error
-	ListRepos() (map[string][]byte, error)
-	GetRepo(repo string) ([]byte, error)
+	ListRepos(objs interface{}) error
+	GetRepo(repo string, obj interface{}) error
 	UpdateRepo(repo string, data interface{}) error
 }
 
@@ -42,22 +43,31 @@ func (erb *etcdRepoDb) DeleteRepo(repo string) error {
 //事务
 func (erb *etcdRepoDb) CreateRepo(repo string, data interface{}) error {
 	key := generateEtcdRepoKey(repo)
+	if erb.etcd.IsExist(key) {
+		return fmt.Errorf("repo has exist")
+	}
+
 	err := erb.etcd.PutMarshal(key, data, 0)
 	return err
 }
 
-func (erb *etcdRepoDb) ListRepos() (map[string][]byte, error) {
-	key := etcdRepoRootPath
-	erb.etcd.ListUnmarshal()
+func (erb *etcdRepoDb) ListRepos(values interface{}) error {
+	key := etcdRepoRootPath + "/"
+	err := erb.etcd.ListUnmarshal(key, values)
+	return err
 }
 
-func (erb *etcdRepoDb) GetRepo(repo string) ([]byte, error) {
+func (erb *etcdRepoDb) GetRepo(repo string, obj interface{}) error {
 	key := generateEtcdRepoKey(repo)
-	return nil, nil
+	err := erb.etcd.GetUnmarshal(key, obj)
+	return err
 }
 
 func (erb *etcdRepoDb) UpdateRepo(repo string, data interface{}) error {
 	key := generateEtcdRepoKey(repo)
-	erb.etcd.PutMarshal(key, data, 0)
-	return nil
+	if !erb.etcd.IsExist(key) {
+		return fmt.Errorf("repo not exist")
+	}
+	err := erb.etcd.PutMarshal(key, data, 0)
+	return err
 }

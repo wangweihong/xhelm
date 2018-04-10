@@ -36,9 +36,10 @@ func NewEtcd(userName, password string, hosts []string) *Etcd {
 }
 
 var (
-	ErrKeyNotFound = fmt.Errorf("key not found")
-	ErrMarshalJson = fmt.Errorf("unable to marshal")
-	ErrEtcd        = fmt.Errorf("etcd error")
+	ErrKeyNotFound   = fmt.Errorf("key not found")
+	ErrMarshalJson   = fmt.Errorf("unable to marshal")
+	ErrUnmarshalJson = fmt.Errorf("unable to unmarshal")
+	ErrEtcd          = fmt.Errorf("etcd error")
 )
 
 // PutMarshal
@@ -46,21 +47,21 @@ func (c *Etcd) PutMarshal(key string, value interface{}, ttlSecond int64) error 
 	data, err := json.Marshal(value)
 	if err != nil {
 		xlog.Logger.Error(err.Error())
-		return fmt.Errorf(ErrMarshalJson, ":", err)
+		return fmt.Errorf("%v:%v", ErrMarshalJson, err)
 	}
 
 	if ttlSecond > 0 {
 		result, err := c.RawClient.Grant(context.Background(), ttlSecond)
 		if err != nil {
 			xlog.Logger.Error(err)
-			return fmt.Errorf(ErrEtcd, ":", err.Error())
+			return fmt.Errorf("%v:%v", ErrEtcd, err.Error())
 		}
 		xlog.Logger.Debug("LeaseID ", fmt.Sprintf("%x", result.ID), ttlSecond)
 
 		_, err = c.RawClient.Put(context.Background(), key, string(data), clientv3.WithLease(result.ID))
 		if err != nil {
 			xlog.Logger.Error(err.Error())
-			return fmt.Errorf(ErrEtcd, ":", err.Error())
+			return fmt.Errorf("%v:%v", ErrEtcd, err.Error())
 		}
 		return nil
 	}
@@ -68,7 +69,7 @@ func (c *Etcd) PutMarshal(key string, value interface{}, ttlSecond int64) error 
 	_, err = c.RawClient.Put(context.Background(), key, string(data))
 	if err != nil {
 		xlog.Logger.Error(err.Error())
-		return fmt.Errorf(ErrEtcd, ":", err.Error())
+		return fmt.Errorf("%v:%v", ErrEtcd, err.Error())
 	}
 
 	return nil
@@ -79,7 +80,7 @@ func (c *Etcd) GetUnmarshal(key string, value interface{}, opts ...clientv3.OpOp
 	result, err := c.RawClient.Get(context.Background(), key, opts...)
 	if err != nil {
 		xlog.Logger.Error(err.Error())
-		return fmt.Errorf(ErrEtcd, ":", err.Error())
+		return fmt.Errorf("%v:%v", ErrEtcd, err.Error())
 	}
 
 	if result.Count == 0 {
@@ -89,7 +90,7 @@ func (c *Etcd) GetUnmarshal(key string, value interface{}, opts ...clientv3.OpOp
 
 	if err := json.Unmarshal(result.Kvs[0].Value, value); err != nil {
 		xlog.Logger.Error(err.Error())
-		return fmt.Errorf(ecode.EcodeUnmarshalJSONError, err.Error())
+		return fmt.Errorf("%v:%v", ErrUnmarshalJson, err.Error())
 	}
 
 	return nil
@@ -106,7 +107,7 @@ func (c *Etcd) ListUnmarshal(key string, valueArr interface{}, opts ...clientv3.
 	result, err := c.RawClient.Get(context.Background(), key, opts...)
 	if err != nil {
 		xlog.Logger.Error(err.Error())
-		return fmt.Errorf(ErrEtcd, ":", err.Error())
+		return fmt.Errorf("%v:%v", ErrEtcd, err.Error())
 	}
 
 	if result.Count == 0 {
@@ -137,7 +138,7 @@ func (c *Etcd) RangeUnmarshal(keyBeg, keyEnd string, valueArr interface{}, opts 
 	result, err := c.RawClient.Get(context.Background(), keyBeg, opts...)
 	if err != nil {
 		xlog.Logger.Error(err.Error())
-		return fmt.Errorf(ErrEtcd, ":", err.Error())
+		return fmt.Errorf("%v:%v", ErrEtcd, err.Error())
 	}
 
 	if result.Count == 0 {
@@ -162,7 +163,7 @@ func (c *Etcd) Delete(key string) error {
 	result, err := c.RawClient.Get(context.Background(), key)
 	if err != nil {
 		xlog.Logger.Error(err.Error())
-		return fmt.Errorf(ErrEtcd, ":", err.Error())
+		return fmt.Errorf("%v:%v", ErrEtcd, err.Error())
 	}
 
 	if result.Count == 0 {
@@ -172,7 +173,7 @@ func (c *Etcd) Delete(key string) error {
 
 	if _, err = c.RawClient.Delete(context.Background(), key); err != nil {
 		xlog.Logger.Error(err.Error())
-		return fmt.Errorf(ErrEtcd, ":", err.Error())
+		return fmt.Errorf("%v:%v", ErrEtcd, err.Error())
 	}
 	return nil
 }
@@ -201,7 +202,7 @@ func (c *Etcd) Close() error {
 
 	err := c.RawClient.Close()
 	if err != nil {
-		return fmt.Errorf(ErrEtcd, ":", err.Error())
+		return fmt.Errorf("%v:%v", ErrEtcd, err.Error())
 	}
 	return nil
 }

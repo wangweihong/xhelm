@@ -1,9 +1,9 @@
 package repository
 
 import (
+	"bytes"
 	"charts"
 	"db"
-	"encoding/json"
 	"fmt"
 	"os"
 	"setting"
@@ -12,15 +12,17 @@ import (
 	"xlog"
 
 	goflock "github.com/theckman/go-flock"
+	helmchartutil "k8s.io/helm/pkg/chartutil"
 	helmdowloader "k8s.io/helm/pkg/downloader"
 	helmgetter "k8s.io/helm/pkg/getter"
 	helmrepo "k8s.io/helm/pkg/repo"
 )
 
 var (
-	RM                      = &RepositoryManager{}
-	repoflocker             = goflock.NewFlock(setting.LocalRepoRootPath() + "/" + "repo.lock")
-	errRemoteRepoNotSupport = fmt.Errorf("remote repo don't support this action")
+	RM                         = &RepositoryManager{}
+	repoflocker                = goflock.NewFlock(setting.LocalRepoRootPath() + "/" + "repo.lock")
+	errRemoteRepoNotSupport    = fmt.Errorf("remote repo don't support this action")
+	errRemoteRepoNotSupportYet = fmt.Errorf("remote repo don't support now")
 )
 
 //TODO: 不需要在内存中维护缓存, 这个访问量实在太少
@@ -44,13 +46,8 @@ type CreateOption struct {
 }
 
 func (rm *RepositoryManager) getRepo(name string) (*Repository, error) {
-	data, err := db.RDB.GetRepo(name)
-	if err != nil {
-		return nil, err
-	}
-
 	var r Repository
-	err = json.Unmarshal(data, &r)
+	err := db.RDB.GetRepo(name, &r)
 	if err != nil {
 		return nil, err
 	}
@@ -94,6 +91,7 @@ func createRepoLocalDir(repo string) error {
 	if err != nil {
 		return err
 	}
+
 	err = os.Mkdir(cacheDir, 0755)
 	if err != nil {
 		return err
@@ -115,7 +113,7 @@ func newHTTPGetter(URL, CertFile, KeyFile, CAFile string) (helmgetter.Getter, er
 }
 
 func downloadRemoteChart(repo *Repository, chartName string, version *string) error {
-	var dest string
+	dest := setting.LocalRepoChartsRootPath(repo.Name)
 	getters := helmgetter.Providers{
 		{
 			Schemes: []string{"http", "https"},
@@ -129,17 +127,29 @@ func downloadRemoteChart(repo *Repository, chartName string, version *string) er
 		Password: repo.Password,
 	}
 
-	chartURL, err := helmrepo.FindChartInAuthRepoURL(repo.URL, repo.Username, repo.Password, chartName, *version, repo.CertFile, repo.KeyFile, repo.CAFile, getters)
+	chartVersion := ""
+	if version != nil {
+		chartVersion = *version
+	}
+
+	chartURL, err := helmrepo.FindChartInAuthRepoURL(repo.URL, repo.Username, repo.Password, chartName, chartVersion, repo.CertFile, repo.KeyFile, repo.CAFile, getters)
 	if err != nil {
 		return nil
 	}
-	saved, v, err := c.DownloadTo(chartURL, *version, dest)
+
+	saved, v, err := c.DownloadTo(chartURL, chartVersion, dest)
 	if err != nil {
 		return err
 	}
 
 	xlog.Logger.Info("Verification: %v\n", v)
 	xlog.Logger.Info("Chart Download to :%v", saved)
+
+	ud := setting.LocalRepoCacheRootPath(repo.Name)
+	err = helmchartutil.ExpandFile(ud, saved)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -174,6 +184,7 @@ func (rm *RepositoryManager) AddRepo(name string, opt *CreateOption) error {
 	repo.CreateTime = time.Now().Unix()
 	repo.Name = name
 	if opt != nil {
+		return errRemoteRepoNotSupportYet
 		repo.Remote = true
 		repo.CAFile = opt.CertFile
 		repo.KeyFile = opt.KeyFile
@@ -183,8 +194,8 @@ func (rm *RepositoryManager) AddRepo(name string, opt *CreateOption) error {
 	}
 
 	//如果因为已存在, 则直接创建失败
-	if err := db.RDB.CreateRepo(name, repo); err == nil {
-		return fmt.Errorf("create to create repo in db failed: %v", err)
+	if err := db.RDB.CreateRepo(name, repo); err != nil {
+		return fmt.Errorf(" create repo in db failed: %v", err)
 	}
 
 	var e error
@@ -249,20 +260,10 @@ func (rm *RepositoryManager) DeleteRepo(name string) error {
 }
 
 func (rm *RepositoryManager) ListRepos() ([]Repository, error) {
-	rsData, err := db.RDB.ListRepos()
+	repos := make([]Repository, 0)
+	err := db.RDB.ListRepos(repos)
 	if err != nil {
 		return nil, err
-	}
-
-	repos := make([]Repository, 0)
-	for _, v := range rsData {
-		var repo Repository
-		err := json.Unmarshal(v, &repo)
-		if err != nil {
-			return nil, fmt.Errorf("unmarshal data fail when list repos : %v", err)
-		}
-
-		repos = append(repos, repo)
 	}
 
 	return repos, nil
@@ -278,30 +279,26 @@ func (rm *RepositoryManager) ListCharts(repoName string) ([]charts.Chart, error)
 
 	cs := make([]charts.Chart, 0)
 	if repo.Remote {
-		indexFile := setting.LocalRepoIndexFile(repoName)
-		indf, err := helmrepo.LoadIndexFile(indexFile)
-		if err != nil {
-			return nil, err
-		}
-		for k, v := range indf.Entries {
-			var c charts.Chart
-			c.Name = k
-			c.Versions = append(c.Versions, v...)
-
-			cs = append(cs, c)
-		}
-	} else {
-		chartsData, err := db.CDB.ListCharts(repoName)
-		if err != nil {
-			return nil, err
-		}
-		for _, v := range chartsData {
-			var c charts.Chart
-			err := json.Unmarshal(v, &c)
+		return nil, errRemoteRepoNotSupportYet
+		/*
+			indexFile := setting.LocalRepoIndexFile(repoName)
+			indf, err := helmrepo.LoadIndexFile(indexFile)
 			if err != nil {
-				return nil, fmt.Errorf("unmarshal data fail when list repo '%v' charts : %v", repoName, err)
+				return nil, err
 			}
-			cs = append(cs, c)
+			for k, v := range indf.Entries {
+				var c charts.Chart
+				c.Name = k
+				c.Versions = append(c.Versions, v...)
+
+				cs = append(cs, c)
+			}
+		*/
+	} else {
+
+		err := db.CDB.ListCharts(repoName, &cs)
+		if err != nil {
+			return nil, err
 		}
 	}
 	return cs, nil
@@ -317,11 +314,18 @@ func (rm *RepositoryManager) RemoveCharts(repoName string, chart string, version
 		return errRemoteRepoNotSupport
 	}
 
-	err = db.CDB.RemoveChart(repoName, chart, version)
-	return err
+	if version != nil {
+		err := db.CDB.RemoveChartVersion(repoName, chart, *version)
+		return err
+	} else {
+		err := db.CDB.RemoveChart(repoName, chart)
+		return err
+	}
+	return nil
 }
 
-func (rm *RepositoryManager) GetChart(repoName string, chartName string, version *string) (*charts.Chart, error) {
+//不指定version,则拉取最新的版本
+func (rm *RepositoryManager) GetChartVersion(repoName string, chartName string, version string) (*charts.Chart, error) {
 	repo, err := rm.getRepo(repoName)
 	if err != nil {
 		return nil, fmt.Errorf("repo not found")
@@ -329,26 +333,41 @@ func (rm *RepositoryManager) GetChart(repoName string, chartName string, version
 
 	if repo.Remote {
 		//指定文件
-		downloadRemoteChart(&repo, chartName, version)
-
+		return nil, errRemoteRepoNotSupportYet
+		err := downloadRemoteChart(repo, chartName, &version)
+		if err != nil {
+			return nil, err
+		}
+		return nil, nil
 	} else {
-		/*
-			chartData, err := db.CDB.GetChart(repoName, chartName, version)
-			if err != nil {
-				return nil, err
-			}
+		var chart charts.Chart
+		err := db.CDB.GetChartVersion(repoName, chartName, version, &chart)
+		if err != nil {
+			return nil, err
+		}
 
-
-			var chart charts.Chart
-			err = json.Unmarshal(chartData, &chart)
-			if err != nil {
-				return nil, err
-			}
-			return &chart, nil
-		*/
+		return &chart, nil
 	}
 	return nil, err
+}
 
+func (rm *RepositoryManager) UncompressData(repoName string, chart *charts.Chart) error {
+	if chart == nil {
+		return fmt.Errorf("invalid chart, chart is nil")
+	}
+	ud := setting.LocalRepoCacheRootPath(repoName)
+	if fi, err := os.Stat(ud); err != nil {
+		if err := os.MkdirAll(ud, 0755); err != nil {
+			return fmt.Errorf("Failed to untar (mkdir): %s", err)
+		}
+
+	} else if !fi.IsDir() {
+		return fmt.Errorf("Failed to untar: %s is not a directory", ud)
+	}
+
+	r := bytes.NewReader(chart.CompressedData)
+	err := helmchartutil.Expand(ud, r)
+	return err
 }
 
 //TODO:
@@ -359,7 +378,7 @@ func (rm *RepositoryManager) GetChart(repoName string, chartName string, version
 func LoadLocalRepo() error {
 	//添加生成本地的目录
 	//加载所有repo信息
-	db.RDB.ListRepos()
+	//db.RDB.ListRepos()
 	//
 
 	return nil
