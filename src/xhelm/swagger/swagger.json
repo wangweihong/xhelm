@@ -1,0 +1,321 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "contact": {}
+    },
+    "basePath": "/v1",
+    "paths": {
+        "/xhelm/charts": {
+            "get": {
+                "tags": [
+                    "xhelm"
+                ],
+                "description": "获取示图列表",
+                "operationId": "ChartController.chart",
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/chart.ListResponse"
+                        }
+                    },
+                    "500": {
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "xhelm"
+                ],
+                "description": "添加新示图",
+                "operationId": "ChartController.chart",
+                "parameters": [
+                    {
+                        "in": "body",
+                        "name": "body",
+                        "description": "示图数据",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/chart.CreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "{string} create success!"
+                    },
+                    "500": {
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/xhelm/charts/{chart}": {
+            "get": {
+                "tags": [
+                    "xhelm"
+                ],
+                "description": "获取示图列表",
+                "operationId": "ChartController.chart",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "chart",
+                        "description": "vsphere集群 uuid",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/chart.GetResponse"
+                        }
+                    },
+                    "500": {
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "xhelm"
+                ],
+                "description": "删除新示图",
+                "operationId": "ChartController.chart",
+                "parameters": [
+                    {
+                        "in": "body",
+                        "name": "body",
+                        "description": "示图数据",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/chart.CreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "{string} create success!"
+                    },
+                    "500": {
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/xhelm/repositories": {
+            "get": {
+                "tags": [
+                    "xhelm"
+                ],
+                "description": "获取仓库列表",
+                "operationId": "RepoController.repo",
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/repo.ListResponse"
+                        }
+                    },
+                    "500": {
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "xhelm"
+                ],
+                "description": "添加新仓库",
+                "operationId": "RepoController.repo",
+                "parameters": [
+                    {
+                        "in": "body",
+                        "name": "body",
+                        "description": "仓库数据",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/repo.CreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "{string} create success!"
+                    },
+                    "500": {
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/xhelm/repositories/{repository}": {
+            "get": {
+                "tags": [
+                    "xhelm"
+                ],
+                "description": "获取仓库列表",
+                "operationId": "RepoController.repo",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "repo",
+                        "description": "vsphere集群 uuid",
+                        "required": true,
+                        "type": "string"
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "",
+                        "schema": {
+                            "$ref": "#/definitions/repo.GetResponse"
+                        }
+                    },
+                    "500": {
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/xhelm/repository/{repository}": {
+            "delete": {
+                "tags": [
+                    "xhelm"
+                ],
+                "description": "删除新仓库",
+                "operationId": "RepoController.repo",
+                "parameters": [
+                    {
+                        "in": "body",
+                        "name": "body",
+                        "description": "仓库数据",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/repo.CreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "{string} create success!"
+                    },
+                    "500": {
+                        "description": ""
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "chart.Chart": {
+            "title": "Chart",
+            "type": "object",
+            "properties": {
+                "create_time": {
+                    "type": "integer",
+                    "format": "int64"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "chart.CreateRequest": {
+            "title": "CreateRequest",
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "chart.GetResponse": {
+            "title": "GetResponse",
+            "type": "object",
+            "properties": {
+                "chart": {
+                    "$ref": "#/definitions/chart.Chart"
+                }
+            }
+        },
+        "chart.ListResponse": {
+            "title": "ListResponse",
+            "type": "object",
+            "properties": {
+                "charts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/chart.Chart"
+                    }
+                },
+                "total": {
+                    "type": "integer",
+                    "format": "int64"
+                }
+            }
+        },
+        "repo.CreateRequest": {
+            "title": "CreateRequest",
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "repo.GetResponse": {
+            "title": "GetResponse",
+            "type": "object",
+            "properties": {
+                "repository": {
+                    "$ref": "#/definitions/repo.Repository"
+                }
+            }
+        },
+        "repo.ListResponse": {
+            "title": "ListResponse",
+            "type": "object",
+            "properties": {
+                "repositories": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/repo.Repository"
+                    }
+                },
+                "total": {
+                    "type": "integer",
+                    "format": "int64"
+                }
+            }
+        },
+        "repo.Repository": {
+            "title": "Repository",
+            "type": "object",
+            "properties": {
+                "create_time": {
+                    "type": "integer",
+                    "format": "int64"
+                },
+                "is_remote": {
+                    "type": "boolean"
+                },
+                "naml": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}
