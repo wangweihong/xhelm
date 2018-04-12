@@ -1,12 +1,10 @@
 package repository
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"sync"
 	"time"
-	"xhelm/charts"
 	"xhelm/db"
 	"xhelm/setting"
 	"xhelm/xlog"
@@ -267,111 +265,6 @@ func (rm *RepositoryManager) ListRepos() ([]Repository, error) {
 	}
 
 	return repos, nil
-}
-
-//TODO: file lock
-func (rm *RepositoryManager) ListCharts(repoName string) ([]charts.Chart, error) {
-
-	repo, err := rm.GetRepo(repoName)
-	if err != nil {
-		return nil, fmt.Errorf("repo not found")
-	}
-
-	cs := make([]charts.Chart, 0)
-	if repo.Remote {
-		return nil, errRemoteRepoNotSupportYet
-		/*
-			indexFile := setting.LocalRepoIndexFile(repoName)
-			indf, err := helmrepo.LoadIndexFile(indexFile)
-			if err != nil {
-				return nil, err
-			}
-			for k, v := range indf.Entries {
-				var c charts.Chart
-				c.Name = k
-				c.Versions = append(c.Versions, v...)
-
-				cs = append(cs, c)
-			}
-		*/
-	} else {
-
-		err := db.CDB.ListAllChartsMetadata(repoName, &cs)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return cs, nil
-}
-
-func (rm *RepositoryManager) RemoveCharts(repoName string, chart string, version *string) error {
-	repo, err := rm.GetRepo(repoName)
-	if err != nil {
-		return fmt.Errorf("repo not found")
-	}
-
-	if repo.Remote {
-		return errRemoteRepoNotSupport
-	}
-
-	if version != nil {
-		err := db.CDB.RemoveChartVersion(repoName, chart, *version)
-		return err
-	} else {
-		err := db.CDB.RemoveChart(repoName, chart)
-		return err
-	}
-	return nil
-}
-
-//不指定version,则拉取最新的版本
-func (rm *RepositoryManager) GetChartVersion(repoName string, chartName string, version string) (*charts.Chart, error) {
-	repo, err := rm.GetRepo(repoName)
-	if err != nil {
-		return nil, fmt.Errorf("repo not found")
-	}
-
-	if repo.Remote {
-		//指定文件
-		return nil, errRemoteRepoNotSupportYet
-		err := downloadRemoteChart(repo, chartName, &version)
-		if err != nil {
-			return nil, err
-		}
-		return nil, nil
-	} else {
-		var chart charts.Chart
-		err := db.CDB.GetChartVersionMetadata(repoName, chartName, version, &chart.Metadata)
-		if err != nil {
-			return nil, err
-		}
-
-		err = db.CDB.GetChartVersionTemplate(repoName, chartName, version, &chart.CompressedData)
-		if err != nil {
-			return nil, err
-		}
-		return &chart, nil
-	}
-	return nil, err
-}
-
-func (rm *RepositoryManager) UncompressData(repoName string, chart *charts.Chart) error {
-	if chart == nil {
-		return fmt.Errorf("invalid chart, chart is nil")
-	}
-	ud := setting.LocalRepoCacheRootPath(repoName)
-	if fi, err := os.Stat(ud); err != nil {
-		if err := os.MkdirAll(ud, 0755); err != nil {
-			return fmt.Errorf("Failed to untar (mkdir): %s", err)
-		}
-
-	} else if !fi.IsDir() {
-		return fmt.Errorf("Failed to untar: %s is not a directory", ud)
-	}
-
-	r := bytes.NewReader(chart.CompressedData)
-	err := helmchartutil.Expand(ud, r)
-	return err
 }
 
 //TODO:

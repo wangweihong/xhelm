@@ -23,8 +23,8 @@ func (this *RepoController) ListRepos() {
 
 // Getrepo
 // @Title repo
-// @Description   获取仓库列表
-// @Param repo path string true "vsphere集群 uuid"
+// @Description   获取仓库信息
+// @Param repository path string true "仓库名"
 // @Success 201 {object} repo.GetResponse
 // @Failure 500
 // @router /repositories/:repository [Get]
@@ -59,10 +59,10 @@ func (this *RepoController) NewRepo() {
 // DeleteRepo
 // @Title repo
 // @Description   删除新仓库
-// @Param body body repo.CreateRequest true "仓库数据"
+// @Param repository path string true "仓库名"
 // @Success 201 {string} create success!
 // @Failure 500
-// @router /repository/:repository [Delete]
+// @router /repositories/:repository [Delete]
 func (this *RepoController) DeleteRepo() {
 	req := &repo.DeleteRequest{}
 	repoName := this.Ctx.Input.Param(":repository")

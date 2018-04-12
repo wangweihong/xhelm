@@ -1,8 +1,12 @@
 package chart
 
 type CreateRequest struct {
-	Name string `json:"name"`
-	URL  string `json:"url"`
+	Repo          string `json:"repository"`
+	Name          string `json:"name"`
+	Version       string `json:"version"`
+	Description   string `json:"description"`
+	Template      string `json:"template"`
+	DefaultValues string `json:"default_values"`
 }
 
 type CreateResponse struct{}
@@ -16,15 +20,17 @@ type ListResponse struct {
 }
 
 type GetRequest struct {
-	Repo string `json:"repository"`
-	Name string `json:"name"`
+	Repo    string `json:"repository"`
+	Name    string `json:"name"`
+	Version string `json:"version"`
 }
 type GetResponse struct {
-	Chart Chart `json:"chart"`
+	Detail Detail `json:"detail"`
 }
 
 type DeleteRequest struct {
-	Repo string `json:"repository"`
-	Name string `json:"name"`
+	Repo    string  `json:"repository"`
+	Name    string  `json:"name"`
+	Version *string `json:"version"`
 }
 type DeleteResponse struct{}

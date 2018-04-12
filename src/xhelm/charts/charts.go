@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/ghodss/yaml"
 	"k8s.io/helm/pkg/chartutil"
@@ -13,14 +14,18 @@ import (
 )
 
 //每个chart的每个版本都是独立的个体
-type Chart struct {
-	Metadata       Metadata
-	CompressedData []byte `compressedData`
-}
+//type Chart struct {
+//	Metadata       Metadata
+//	CompressedData []byte `compressedData`
+//}
+
+type Chart cpb.Chart
 type Metadata struct {
-	Digest  string `json:"digest"`
-	Name    string `json:"name"`
-	Version string `json:"version"`
+	Digest     string    `json:"digest"`
+	Name       string    `json:"name"`
+	Version    string    `json:"version"` //最新版本
+	Icon       string    `json:"icon"`    //图标,必须和CompressedData中一致
+	CreateTime time.Time `json:"create_time"`
 }
 
 const notesFileSuffix = "NOTES.txt"
@@ -126,4 +131,8 @@ func parse() {
 	}
 	fmt.Println("notes: ==================")
 	fmt.Println(notes)
+}
+
+func TransformHelmChartToChart() {
+
 }

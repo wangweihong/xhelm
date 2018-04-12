@@ -3,27 +3,15 @@ info: {}
 basePath: /v1
 paths:
   /xhelm/charts:
-    get:
-      tags:
-      - xhelm
-      description: 获取示图列表
-      operationId: ChartController.chart
-      responses:
-        "201":
-          description: ""
-          schema:
-            $ref: '#/definitions/chart.ListResponse'
-        "500":
-          description: ""
     post:
       tags:
       - xhelm
-      description: 添加新示图
+      description: 添加应用模板
       operationId: ChartController.chart
       parameters:
       - in: body
         name: body
-        description: 示图数据
+        description: 应用模板创建参数
         required: true
         schema:
           $ref: '#/definitions/chart.CreateRequest'
@@ -32,37 +20,50 @@ paths:
           description: '{string} create success!'
         "500":
           description: ""
-  /xhelm/charts/{chart}:
-    get:
+  /xhelm/repoistories/{repository}/charts/{chart}:
+    delete:
       tags:
       - xhelm
-      description: 获取示图列表
+      description: 删除应用模板
       operationId: ChartController.chart
       parameters:
       - in: path
+        name: repository
+        description: 仓库
+        required: true
+        type: string
+      - in: path
         name: chart
-        description: vsphere集群 uuid
+        description: 应用模板
         required: true
         type: string
       responses:
         "201":
-          description: ""
-          schema:
-            $ref: '#/definitions/chart.GetResponse'
+          description: '{string} create success!'
         "500":
           description: ""
+  /xhelm/repoistories/{repository}/charts/{chart}/version/{version}:
     delete:
       tags:
       - xhelm
-      description: 删除新示图
+      description: 删除应用模板
       operationId: ChartController.chart
       parameters:
-      - in: body
-        name: body
-        description: 示图数据
+      - in: path
+        name: repository
+        description: 仓库
         required: true
-        schema:
-          $ref: '#/definitions/chart.CreateRequest'
+        type: string
+      - in: path
+        name: chart
+        description: 应用模板
+        required: true
+        type: string
+      - in: path
+        name: version
+        description: 版本
+        required: true
+        type: string
       responses:
         "201":
           description: '{string} create success!'
@@ -102,12 +103,12 @@ paths:
     get:
       tags:
       - xhelm
-      description: 获取仓库列表
+      description: 获取仓库信息
       operationId: RepoController.repo
       parameters:
       - in: path
-        name: repo
-        description: vsphere集群 uuid
+        name: repository
+        description: 仓库名
         required: true
         type: string
       responses:
@@ -117,22 +118,68 @@ paths:
             $ref: '#/definitions/repo.GetResponse'
         "500":
           description: ""
-  /xhelm/repository/{repository}:
     delete:
       tags:
       - xhelm
       description: 删除新仓库
       operationId: RepoController.repo
       parameters:
-      - in: body
-        name: body
-        description: 仓库数据
+      - in: path
+        name: repository
+        description: 仓库名
         required: true
-        schema:
-          $ref: '#/definitions/repo.CreateRequest'
+        type: string
       responses:
         "201":
           description: '{string} create success!'
+        "500":
+          description: ""
+  /xhelm/repositories/{repository}/charts:
+    get:
+      tags:
+      - xhelm
+      description: 获取仓库所有应用模板
+      operationId: ChartController.chart
+      parameters:
+      - in: path
+        name: repository
+        description: 仓库
+        required: true
+        type: string
+      responses:
+        "201":
+          description: ""
+          schema:
+            $ref: '#/definitions/chart.ListResponse'
+        "500":
+          description: ""
+  /xhelm/repositories/{repository}/charts/{chart}/version/{version}:
+    get:
+      tags:
+      - xhelm
+      description: 获取应用模板元数据
+      operationId: ChartController.chart
+      parameters:
+      - in: path
+        name: repository
+        description: 仓库
+        required: true
+        type: string
+      - in: path
+        name: chart
+        description: 应用模板
+        required: true
+        type: string
+      - in: path
+        name: version
+        description: 版本
+        required: true
+        type: string
+      responses:
+        "201":
+          description: ""
+          schema:
+            $ref: '#/definitions/chart.GetResponse'
         "500":
           description: ""
 definitions:
@@ -143,22 +190,52 @@ definitions:
       create_time:
         type: integer
         format: int64
+      latest:
+        type: string
       name:
         type: string
+      versions:
+        type: array
+        items:
+          type: string
   chart.CreateRequest:
     title: CreateRequest
     type: object
     properties:
+      default_values:
+        type: string
+      description:
+        type: string
       name:
         type: string
-      url:
+      repository:
+        type: string
+      template:
+        type: string
+      version:
+        type: string
+  chart.Detail:
+    title: Detail
+    type: object
+    properties:
+      appVersion:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      string:
+        type: string
+      template:
+        type: string
+      version:
         type: string
   chart.GetResponse:
     title: GetResponse
     type: object
     properties:
-      chart:
-        $ref: '#/definitions/chart.Chart'
+      detail:
+        $ref: '#/definitions/chart.Detail'
   chart.ListResponse:
     title: ListResponse
     type: object
@@ -204,7 +281,7 @@ definitions:
         format: int64
       is_remote:
         type: boolean
-      naml:
+      name:
         type: string
       url:
         type: string

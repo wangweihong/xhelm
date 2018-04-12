@@ -9,14 +9,14 @@ func init() {
 	beego.GlobalControllerRouter["xhelm/controllers:ChartController"] = append(beego.GlobalControllerRouter["xhelm/controllers:ChartController"],
 		beego.ControllerComments{
 			Method: "ListCharts",
-			Router: `/charts`,
+			Router: `/repositories/:repository/charts`,
 			AllowHTTPMethods: []string{"Get"},
 			Params: nil})
 
 	beego.GlobalControllerRouter["xhelm/controllers:ChartController"] = append(beego.GlobalControllerRouter["xhelm/controllers:ChartController"],
 		beego.ControllerComments{
 			Method: "GetChart",
-			Router: `/charts/:chart`,
+			Router: `/repositories/:repository/charts/:chart/version/:version`,
 			AllowHTTPMethods: []string{"Get"},
 			Params: nil})
 
@@ -30,7 +30,14 @@ func init() {
 	beego.GlobalControllerRouter["xhelm/controllers:ChartController"] = append(beego.GlobalControllerRouter["xhelm/controllers:ChartController"],
 		beego.ControllerComments{
 			Method: "DeleteChart",
-			Router: `/charts/:chart`,
+			Router: `/repoistories/:repository/charts/:chart`,
+			AllowHTTPMethods: []string{"Delete"},
+			Params: nil})
+
+	beego.GlobalControllerRouter["xhelm/controllers:ChartController"] = append(beego.GlobalControllerRouter["xhelm/controllers:ChartController"],
+		beego.ControllerComments{
+			Method: "DeleteChartVersion",
+			Router: `/repoistories/:repository/charts/:chart/version/:version`,
 			AllowHTTPMethods: []string{"Delete"},
 			Params: nil})
 
@@ -58,7 +65,7 @@ func init() {
 	beego.GlobalControllerRouter["xhelm/controllers:RepoController"] = append(beego.GlobalControllerRouter["xhelm/controllers:RepoController"],
 		beego.ControllerComments{
 			Method: "DeleteRepo",
-			Router: `/repository/:repository`,
+			Router: `/repositories/:repository`,
 			AllowHTTPMethods: []string{"Delete"},
 			Params: nil})
 

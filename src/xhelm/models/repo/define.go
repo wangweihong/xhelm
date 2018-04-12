@@ -26,7 +26,7 @@ type DeleteRequest struct {
 type DeleteResponse struct{}
 
 type Repository struct {
-	Name       string `json:"naml"`
+	Name       string `json:"name"`
 	URL        string `json:"url"`
 	Remote     bool   `json:"is_remote"`
 	CreateTime int64  `json:"create_time"`
